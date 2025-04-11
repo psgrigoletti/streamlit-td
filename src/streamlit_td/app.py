@@ -1,38 +1,19 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from datetime import datetime, timedelta
-import requests
-from io import StringIO
+from datetime import datetime
 from alerts import AlertManager
+from data import fetch_tesouro_data, process_tesouro_data, fetch_dolar_data
+from visualization import (
+    plot_taxa_evolucao,
+    plot_preco_evolucao,
+    plot_dolar_evolucao
+)
 
 st.set_page_config(
     page_title="Tesouro Direto - Visualização de Dados",
     page_icon="📈",
     layout="wide"
 )
-
-@st.cache_data(ttl=3600)  # Cache por 1 hora
-def fetch_tesouro_data():
-    """
-    Busca dados do Tesouro Direto através da API do Tesouro Transparente.
-    Os dados são cacheados por 1 hora para evitar múltiplas requisições.
-    """
-    base_url = (
-        "https://www.tesourotransparente.gov.br/ckan/dataset/"
-        "df56aa42-484a-4a59-8184-7676580c81e3/resource/"
-        "796d2059-14e9-44e3-80c9-2d9e30b405c1/download/"
-        "PrecoTaxaTesouroDireto.csv"
-    )
-    
-    try:
-        response = requests.get(base_url)
-        response.raise_for_status()
-        df = pd.read_csv(StringIO(response.text), sep=';', decimal=',')
-        return df
-    except Exception as e:
-        st.error(f"Erro ao buscar dados: {str(e)}")
-        return None
 
 def main():
     st.title("📈 Visualização de Dados do Tesouro Direto")
@@ -42,21 +23,9 @@ def main():
     
     # Buscar dados (agora com cache)
     df = fetch_tesouro_data()
+    df = process_tesouro_data(df)
     
     if df is not None:
-        # Converter coluna de data
-        df['Data Vencimento'] = pd.to_datetime(
-            df['Data Vencimento'], 
-            format='%d/%m/%Y'
-        )
-        df['Data Base'] = pd.to_datetime(
-            df['Data Base'], 
-            format='%d/%m/%Y'
-        )
-        
-        # Adicionar coluna de ano de vencimento
-        df['Ano Vencimento'] = df['Data Vencimento'].dt.year
-        
         # Sidebar para filtros
         st.sidebar.header("Filtros")
         
@@ -133,37 +102,20 @@ def main():
         # Ordenar dados por data base
         df_filtrado = df_filtrado.sort_values('Data Base')
         
+        # Buscar dados do dólar
+        df_dolar = fetch_dolar_data(data_inicio, data_fim)
+        
         # Gráfico de linha para taxas
         st.subheader(f"Evolução das Taxas - {tipo_selecionado}")
-        fig_taxa = px.line(
-            df_filtrado,
-            x='Data Base',
-            y='Taxa Compra Manha',
-            color='Ano Vencimento',
-            title='Taxa de Compra ao Longo do Tempo',
-            labels={
-                'Data Base': 'Data',
-                'Taxa Compra Manha': 'Taxa de Compra (%)',
-                'Ano Vencimento': 'Ano de Vencimento'
-            }
-        )
-        st.plotly_chart(fig_taxa, use_container_width=True)
+        plot_taxa_evolucao(df_filtrado, tipo_selecionado)
         
         # Gráfico de linha para preços
         st.subheader(f"Evolução dos Preços - {tipo_selecionado}")
-        fig_preco = px.line(
-            df_filtrado,
-            x='Data Base',
-            y='PU Compra Manha',
-            color='Ano Vencimento',
-            title='Preço de Compra ao Longo do Tempo',
-            labels={
-                'Data Base': 'Data',
-                'PU Compra Manha': 'Preço de Compra (R$)',
-                'Ano Vencimento': 'Ano de Vencimento'
-            }
-        )
-        st.plotly_chart(fig_preco, use_container_width=True)
+        plot_preco_evolucao(df_filtrado, tipo_selecionado)
+        
+        # Gráfico de linha para dólar
+        st.subheader("Evolução do Dólar")
+        plot_dolar_evolucao(df_dolar)
         
         # Tabela com dados recentes
         st.subheader("Dados Recentes")
@@ -247,17 +199,28 @@ def main():
             for idx, alerta in alertas_df.iterrows():
                 col1, col2 = st.columns([0.9, 0.1])
                 with col1:
-                    st.write(f"**{alerta['nome']}** - {alerta['tipo_titulo']} ({alerta['ano_vencimento']})")
+                    st.write(
+                        f"**{alerta['nome']}** - {alerta['tipo_titulo']} "
+                        f"({alerta['ano_vencimento']})"
+                    )
                     st.write(f"Email: {alerta['email']}")
                     detalhes = []
                     if pd.notna(alerta['preco_min']):
-                        detalhes.append(f"Preço Mín: R$ {alerta['preco_min']:.2f}")
+                        detalhes.append(
+                            f"Preço Mín: R$ {alerta['preco_min']:.2f}"
+                        )
                     if pd.notna(alerta['preco_max']):
-                        detalhes.append(f"Preço Máx: R$ {alerta['preco_max']:.2f}")
+                        detalhes.append(
+                            f"Preço Máx: R$ {alerta['preco_max']:.2f}"
+                        )
                     if pd.notna(alerta['taxa_min']):
-                        detalhes.append(f"Taxa Mín: {alerta['taxa_min']:.2f}%")
+                        detalhes.append(
+                            f"Taxa Mín: {alerta['taxa_min']:.2f}%"
+                        )
                     if pd.notna(alerta['taxa_max']):
-                        detalhes.append(f"Taxa Máx: {alerta['taxa_max']:.2f}%")
+                        detalhes.append(
+                            f"Taxa Máx: {alerta['taxa_max']:.2f}%"
+                        )
                     st.write(" | ".join(detalhes))
                     st.write(f"Criado em: {alerta['data_criacao']}")
                 with col2:
