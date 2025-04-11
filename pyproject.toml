@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "streamlit-td"
+version = "0.1.0"
+description = "Aplicação Streamlit para visualização de dados do Tesouro Direto"
+authors = ["Pablo Souza Grigoletti <psgrigoletti@gmail.com>"]
+readme = "README.md"
+packages = [{include = "streamlit_td", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+streamlit = "^1.44.1"
+pandas = "^2.2.3"
+numpy = "^2.2.4"
+plotly = "^6.0.1"
+requests = "^2.32.3"
+python-dotenv = "^1.1.0"
+
+pytest = "^8.3.5"
+black = "^25.1.0"
+isort = "^6.0.1"
+flake8 = "^7.2.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api" 
