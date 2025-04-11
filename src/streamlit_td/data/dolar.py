@@ -3,8 +3,13 @@ import pandas as pd
 import requests
 from datetime import datetime, timedelta
 
+import sys
+sys.path.append("..")
 
-@st.cache_data(ttl=3600)  # Cache por 1 hora
+from config import BCB_API_URL, CACHE_TTL
+
+
+@st.cache_data(ttl=CACHE_TTL)
 def fetch_dolar_data(data_inicio, data_fim):
     """
     Busca dados do dólar através da API do Banco Central do Brasil.
@@ -60,13 +65,10 @@ def _fetch_dolar_periodo(data_inicio, data_fim):
     data_fim_str = data_fim.strftime('%d/%m/%Y')
     
     # URL da API do BCB para cotação do dólar (código 10813)
-    base_url = (
-        "https://api.bcb.gov.br/dados/serie/bcdata.sgs.10813/dados"
-        f"?formato=json&dataInicial={data_inicio_str}&dataFinal={data_fim_str}"
-    )
+    url = f"{BCB_API_URL}?formato=json&dataInicial={data_inicio_str}&dataFinal={data_fim_str}"
     
     try:
-        response = requests.get(base_url)
+        response = requests.get(url)
         response.raise_for_status()
         dados = response.json()
         

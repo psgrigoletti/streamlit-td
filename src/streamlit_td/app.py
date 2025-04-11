@@ -207,11 +207,11 @@ def main():
                     detalhes = []
                     if pd.notna(alerta['preco_min']):
                         detalhes.append(
-                            f"Preço Mín: R$ {alerta['preco_min']:.2f}"
+                            f"Preço Mín: R\$ {alerta['preco_min']:.2f}"
                         )
                     if pd.notna(alerta['preco_max']):
                         detalhes.append(
-                            f"Preço Máx: R$ {alerta['preco_max']:.2f}"
+                            f"Preço Máx: R\$ {alerta['preco_max']:.2f}"
                         )
                     if pd.notna(alerta['taxa_min']):
                         detalhes.append(
