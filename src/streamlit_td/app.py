@@ -66,14 +66,29 @@ def main():
             ['Data Vencimento']
             .unique()
         )
-        vencimentos_selecionados = st.sidebar.multiselect(
-            "Selecione as datas de vencimento",
-            options=vencimentos_disponiveis,
-            default=vencimentos_disponiveis[:3] 
-            if len(vencimentos_disponiveis) > 0 
-            else None,
-            format_func=lambda x: x.strftime('%d/%m/%Y')
+        
+        # Criar dicionário para mapear anos para datas de vencimento
+        vencimentos_por_ano = {}
+        for data in vencimentos_disponiveis:
+            ano = data.year
+            if ano not in vencimentos_por_ano:
+                vencimentos_por_ano[ano] = []
+            vencimentos_por_ano[ano].append(data)
+        
+        # Ordenar anos
+        anos_disponiveis = sorted(vencimentos_por_ano.keys())
+        
+        # Selecionar anos
+        anos_selecionados = st.sidebar.multiselect(
+            "Selecione os anos de vencimento",
+            options=anos_disponiveis,
+            default=anos_disponiveis[:3] if len(anos_disponiveis) > 0 else None
         )
+        
+        # Obter datas de vencimento correspondentes aos anos selecionados
+        vencimentos_selecionados = []
+        for ano in anos_selecionados:
+            vencimentos_selecionados.extend(vencimentos_por_ano[ano])
         
         # Filtro por data base
         data_min = df['Data Base'].min()
@@ -124,6 +139,22 @@ def main():
         )
         st.plotly_chart(fig_taxa, use_container_width=True)
         
+        # Gráfico de linha para preços
+        st.subheader(f"Evolução dos Preços - {tipo_selecionado}")
+        fig_preco = px.line(
+            df_filtrado,
+            x='Data Base',
+            y='PU Compra Manha',
+            color='Data Vencimento',
+            title='Preço de Compra ao Longo do Tempo',
+            labels={
+                'Data Base': 'Data',
+                'PU Compra Manha': 'Preço de Compra (R$)',
+                'Data Vencimento': 'Data de Vencimento'
+            }
+        )
+        st.plotly_chart(fig_preco, use_container_width=True)
+        
         # Tabela com dados recentes
         st.subheader("Dados Recentes")
         st.dataframe(
@@ -132,4 +163,4 @@ def main():
         )
 
 if __name__ == "__main__":
-    main() 
+    main()
