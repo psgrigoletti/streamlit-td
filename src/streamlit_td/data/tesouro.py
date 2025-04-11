@@ -21,7 +21,7 @@ def fetch_tesouro_data():
         df = pd.read_csv(StringIO(response.text), sep=';', decimal=',')
         return df
     except Exception as e:
-        st.error(f"Erro ao buscar dados: {str(e)}")
+        st.error(f"Erro ao buscar dados do Tesouro Direto: {str(e)}")
         return None
 
 

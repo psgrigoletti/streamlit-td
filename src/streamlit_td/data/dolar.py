@@ -79,5 +79,5 @@ def _fetch_dolar_periodo(data_inicio, data_fim):
         
         return df
     except Exception as e:
-        st.error(f"Erro ao buscar dados do dólar: {str(e)}")
+        st.error(f"Erro ao buscar dados do Dólar: {str(e)}")
         return None 
