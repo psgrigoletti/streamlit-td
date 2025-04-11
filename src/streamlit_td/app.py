@@ -4,6 +4,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import requests
 from io import StringIO
+from alerts import AlertManager
 
 st.set_page_config(
     page_title="Tesouro Direto - Visualização de Dados",
@@ -36,6 +37,9 @@ def fetch_tesouro_data():
 def main():
     st.title("📈 Visualização de Dados do Tesouro Direto")
     
+    # Inicializar gerenciador de alertas
+    alert_manager = AlertManager()
+    
     # Buscar dados (agora com cache)
     df = fetch_tesouro_data()
     
@@ -49,6 +53,9 @@ def main():
             df['Data Base'], 
             format='%d/%m/%Y'
         )
+        
+        # Adicionar coluna de ano de vencimento
+        df['Ano Vencimento'] = df['Data Vencimento'].dt.year
         
         # Sidebar para filtros
         st.sidebar.header("Filtros")
@@ -75,14 +82,17 @@ def main():
                 vencimentos_por_ano[ano] = []
             vencimentos_por_ano[ano].append(data)
         
-        # Ordenar anos
-        anos_disponiveis = sorted(vencimentos_por_ano.keys())
+        # Ordenar anos em ordem decrescente
+        anos_disponiveis = sorted(vencimentos_por_ano.keys(), reverse=True)
         
-        # Selecionar anos
+        # Obter ano atual
+        ano_atual = datetime.now().year
+        
+        # Selecionar anos (pré-selecionando anos >= ano atual)
         anos_selecionados = st.sidebar.multiselect(
             "Selecione os anos de vencimento",
             options=anos_disponiveis,
-            default=anos_disponiveis[:3] if len(anos_disponiveis) > 0 else None
+            default=[ano for ano in anos_disponiveis if ano >= ano_atual]
         )
         
         # Obter datas de vencimento correspondentes aos anos selecionados
@@ -129,12 +139,12 @@ def main():
             df_filtrado,
             x='Data Base',
             y='Taxa Compra Manha',
-            color='Data Vencimento',
+            color='Ano Vencimento',
             title='Taxa de Compra ao Longo do Tempo',
             labels={
                 'Data Base': 'Data',
                 'Taxa Compra Manha': 'Taxa de Compra (%)',
-                'Data Vencimento': 'Data de Vencimento'
+                'Ano Vencimento': 'Ano de Vencimento'
             }
         )
         st.plotly_chart(fig_taxa, use_container_width=True)
@@ -145,12 +155,12 @@ def main():
             df_filtrado,
             x='Data Base',
             y='PU Compra Manha',
-            color='Data Vencimento',
+            color='Ano Vencimento',
             title='Preço de Compra ao Longo do Tempo',
             labels={
                 'Data Base': 'Data',
                 'PU Compra Manha': 'Preço de Compra (R$)',
-                'Data Vencimento': 'Data de Vencimento'
+                'Ano Vencimento': 'Ano de Vencimento'
             }
         )
         st.plotly_chart(fig_preco, use_container_width=True)
@@ -161,6 +171,116 @@ def main():
             df_filtrado.sort_values('Data Base', ascending=False).head(10),
             use_container_width=True
         )
+        
+        # Seção de Alertas
+        st.header("📢 Configuração de Alertas")
+        
+        # Formulário para novo alerta
+        with st.form("novo_alerta"):
+            st.subheader("Novo Alerta")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                nome = st.text_input("Seu Nome")
+                email = st.text_input("Seu Email")
+                tipo_titulo_alerta = st.selectbox(
+                    "Tipo de Título",
+                    tipos_titulo
+                )
+                ano_vencimento_alerta = st.selectbox(
+                    "Ano de Vencimento",
+                    sorted(vencimentos_por_ano.keys(), reverse=True)
+                )
+            
+            with col2:
+                st.subheader("Critérios de Alerta")
+                preco_min = st.number_input(
+                    "Preço Mínimo (R$)",
+                    min_value=0.0,
+                    value=None,
+                    step=0.01
+                )
+                preco_max = st.number_input(
+                    "Preço Máximo (R$)",
+                    min_value=0.0,
+                    value=None,
+                    step=0.01
+                )
+                taxa_min = st.number_input(
+                    "Taxa Mínima (%)",
+                    min_value=0.0,
+                    value=None,
+                    step=0.01
+                )
+                taxa_max = st.number_input(
+                    "Taxa Máxima (%)",
+                    min_value=0.0,
+                    value=None,
+                    step=0.01
+                )
+            
+            if st.form_submit_button("Criar Alerta"):
+                if nome and email:
+                    alert_manager.add_alert(
+                        nome=nome,
+                        email=email,
+                        tipo_titulo=tipo_titulo_alerta,
+                        ano_vencimento=ano_vencimento_alerta,
+                        preco_min=preco_min,
+                        preco_max=preco_max,
+                        taxa_min=taxa_min,
+                        taxa_max=taxa_max
+                    )
+                    st.success("Alerta criado com sucesso!")
+                else:
+                    st.error("Por favor, preencha nome e email.")
+        
+        # Tabela de alertas ativos
+        st.subheader("Alertas Ativos")
+        if not alert_manager.alerts.empty:
+            # Adicionar coluna de ações
+            alertas_df = alert_manager.alerts.copy()
+            alertas_df['Ações'] = range(len(alertas_df))
+            
+            # Mostrar tabela com botões de remoção
+            for idx, alerta in alertas_df.iterrows():
+                col1, col2 = st.columns([0.9, 0.1])
+                with col1:
+                    st.write(f"**{alerta['nome']}** - {alerta['tipo_titulo']} ({alerta['ano_vencimento']})")
+                    st.write(f"Email: {alerta['email']}")
+                    detalhes = []
+                    if pd.notna(alerta['preco_min']):
+                        detalhes.append(f"Preço Mín: R$ {alerta['preco_min']:.2f}")
+                    if pd.notna(alerta['preco_max']):
+                        detalhes.append(f"Preço Máx: R$ {alerta['preco_max']:.2f}")
+                    if pd.notna(alerta['taxa_min']):
+                        detalhes.append(f"Taxa Mín: {alerta['taxa_min']:.2f}%")
+                    if pd.notna(alerta['taxa_max']):
+                        detalhes.append(f"Taxa Máx: {alerta['taxa_max']:.2f}%")
+                    st.write(" | ".join(detalhes))
+                    st.write(f"Criado em: {alerta['data_criacao']}")
+                with col2:
+                    if st.button("🗑️", key=f"remove_{idx}"):
+                        alert_manager.remove_alert(idx)
+                        st.rerun()
+                st.divider()
+        else:
+            st.info("Nenhum alerta configurado.")
+        
+        # Botão para verificar alertas
+        if st.button("Verificar Alertas"):
+            alerts_triggered = alert_manager.check_alerts(df)
+            if alerts_triggered:
+                st.success(f"{len(alerts_triggered)} alerta(s) acionado(s)!")
+                for alert in alerts_triggered:
+                    try:
+                        alert_manager.send_alert_email(alert)
+                        st.success(f"Email enviado para {alert['email']}")
+                    except Exception as e:
+                        st.error(f"Erro ao enviar email: {str(e)}")
+            else:
+                st.info("Nenhum alerta acionado.")
 
 if __name__ == "__main__":
     main()
