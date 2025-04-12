@@ -32,8 +32,11 @@ EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 # Configurações de cache
 CACHE_TTL = int(os.getenv('CACHE_TTL', '3600'))  # 1 hora em segundos
 
-# Configurações de arquivos
-ALERTS_FILE = os.getenv(
-    'ALERTS_FILE',
-    str(Path(__file__).parent / 'data' / 'alerts.csv')
-) 
+# Configurações do Redis
+REDIS_HOST = os.getenv('REDIS_HOST')
+REDIS_PORT = int(os.getenv('REDIS_PORT'))
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
+
+# Segurança
+USUARIO = os.getenv('USUARIO')
+SENHA = os.getenv('SENHA')

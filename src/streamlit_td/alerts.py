@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import smtplib
 from email.mime.text import MIMEText
@@ -5,27 +6,30 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from pathlib import Path
 from config import (
-    SMTP_SERVER,
-    SMTP_PORT,
-    EMAIL_USER,
-    EMAIL_PASSWORD,
-    ALERTS_FILE
+    SMTP_SERVER, SMTP_PORT, EMAIL_USER, EMAIL_PASSWORD
 )
+from utils.redis import RedisManager
 
 
 class AlertManager:
     def __init__(self):
         """Inicializa o gerenciador de alertas."""
-        self.alerts_file = ALERTS_FILE
+        self.redis_manager = RedisManager()
         self.alerts = self._load_alerts()
-    
+
     def _load_alerts(self):
-        """Carrega os alertas do arquivo CSV."""
+        """Carrega os alertas do Redis."""
         try:
-            if Path(self.alerts_file).exists():
-                df = pd.read_csv(self.alerts_file)
-                df['data_criacao'] = pd.to_datetime(df['data_criacao'])
-                return df
+            alerts_data = []
+            keys = self.redis_manager.redis_client.keys("alert:*")
+            for key in keys:
+                alert_data = self.redis_manager.get_data(key)
+                if alert_data:
+                    alert = json.loads(alert_data)
+                    alert['data_criacao'] = pd.to_datetime(alert['data_criacao'])
+                    alerts_data.append(alert)
+            if alerts_data:
+                return pd.DataFrame(alerts_data)
         except Exception as e:
             print(f"Erro ao carregar alertas: {str(e)}")
         return pd.DataFrame(columns=[
@@ -33,14 +37,17 @@ class AlertManager:
             'preco_min', 'preco_max', 'taxa_min', 'taxa_max',
             'data_criacao'
         ])
-    
+
     def _save_alerts(self):
-        """Salva os alertas no arquivo CSV."""
+        """Salva os alertas no Redis."""
         try:
-            self.alerts.to_csv(self.alerts_file, index=False)
+            for index, row in self.alerts.iterrows():
+                key = f"alert:{index}"
+                self.redis_manager.set_data(key, json.dumps(row.to_dict(), default=str))
             return True
         except Exception as e:
             print(f"Erro ao salvar alertas: {str(e)}")
+            
             return False
     
     def add_alert(
@@ -71,25 +78,25 @@ class AlertManager:
             'taxa_max': taxa_max,
             'data_criacao': datetime.now()
         }
-        
+
         self.alerts = pd.concat(
             [self.alerts, pd.DataFrame([new_alert])],
             ignore_index=True
         )
         return self._save_alerts()
-    
+
     def remove_alert(self, index):
-        """
-        Remove um alerta pelo índice.
+        """Remove um alerta pelo índice.
         
         Args:
             index (int): Índice do alerta a ser removido
         """
         if 0 <= index < len(self.alerts):
             self.alerts = self.alerts.drop(index).reset_index(drop=True)
+            self.redis_manager.delete_data(f"alert:{index}")
             return self._save_alerts()
         return False
-    
+
     def check_alerts(self, df):
         """
         Verifica se algum alerta foi acionado com base nos dados fornecidos.
@@ -101,58 +108,62 @@ class AlertManager:
             list: Lista de alertas acionados
         """
         alerts_triggered = []
-        
+
         for _, alert in self.alerts.iterrows():
             # Filtrar dados para o tipo e ano de vencimento do alerta
             alert_data = df[
                 (df['Tipo Titulo'] == alert['tipo_titulo']) &
                 (df['Ano Vencimento'] == alert['ano_vencimento'])
             ]
-            
+
             if not alert_data.empty:
-                # Obter dados mais recentes
-                latest_data = alert_data.iloc[-1]
-                
+                # Obter dados mais recentes (maior Data Base)
+                latest_data = alert_data.sort_values('Data Base', ascending=False).iloc[0]
+
                 # Verificar condições do alerta
                 triggered = False
                 message = []
-                
-                if pd.notna(alert['preco_min']) and latest_data['PU Compra Manha'] >= alert['preco_min']:
+
+                if pd.notna(alert['preco_min']) and latest_data[
+                    'PU Compra Manha'] >= alert['preco_min']:
                     triggered = True
                     message.append(
                         f"Preço atual (R$ {latest_data['PU Compra Manha']:.2f}) "
-                        f"acima do mínimo (R$ {alert['preco_min']:.2f})"
+                        f"acima do mínimo (R$ {alert['preco_min']:.2f})\n"
                     )
-                
-                if pd.notna(alert['preco_max']) and latest_data['PU Compra Manha'] <= alert['preco_max']:
+
+                if pd.notna(alert['preco_max']) and latest_data[
+                    'PU Compra Manha'] <= alert['preco_max']:
                     triggered = True
                     message.append(
                         f"Preço atual (R$ {latest_data['PU Compra Manha']:.2f}) "
-                        f"abaixo do máximo (R$ {alert['preco_max']:.2f})"
+                        f"abaixo do máximo (R$ {alert['preco_max']:.2f})\n"
                     )
-                
-                if pd.notna(alert['taxa_min']) and latest_data['Taxa Compra Manha'] >= alert['taxa_min']:
+
+                if pd.notna(alert['taxa_min']) and latest_data[
+                    'Taxa Compra Manha'] >= alert['taxa_min']:
                     triggered = True
                     message.append(
                         f"Taxa atual ({latest_data['Taxa Compra Manha']:.2f}%) "
-                        f"acima do mínimo ({alert['taxa_min']:.2f}%)"
+                        f"acima do mínimo ({alert['taxa_min']:.2f}%)\n"
                     )
-                
-                if pd.notna(alert['taxa_max']) and latest_data['Taxa Compra Manha'] <= alert['taxa_max']:
+
+                if pd.notna(alert['taxa_max']) and latest_data[
+                    'Taxa Compra Manha'] <= alert['taxa_max']:
                     triggered = True
                     message.append(
                         f"Taxa atual ({latest_data['Taxa Compra Manha']:.2f}%) "
-                        f"abaixo do máximo ({alert['taxa_max']:.2f}%)"
+                        f"abaixo do máximo ({alert['taxa_max']:.2f}%)\n"
                     )
-                
+
                 if triggered:
                     alert_copy = alert.copy()
-                    alert_copy['message'] = " | ".join(message)
+                    alert_copy['message'] = " ".join(message)
                     alerts_triggered.append(alert_copy)
         
         return alerts_triggered
     
-    def send_alert_email(self, alert):
+    def send_alert_email(self, alert):        
         """
         Envia email de alerta para o usuário usando o Brevo.
         
@@ -162,36 +173,35 @@ class AlertManager:
         if not EMAIL_USER or not EMAIL_PASSWORD:
             raise ValueError("Credenciais de email não configuradas")
         
-        # Criar mensagem
+        # Criar mensagem        
         msg = MIMEMultipart()
         msg['From'] = 'psgrigoletti@gmail.com'
         msg['To'] = alert['email']
-        msg['Subject'] = f"Alerta Tesouro Direto - {alert['tipo_titulo']}"
-        
+        msg['Subject'] = f"Alerta Tesouro Direto - {alert['tipo_titulo']} ({alert['ano_vencimento']}) foi acionado!"
+
         # Corpo do email
-        body = f"""
+        body = f"""        
         Olá {alert['nome']},
         
         Seu alerta para o título {alert['tipo_titulo']} ({alert['ano_vencimento']}) foi acionado!
         
-        Motivo: {alert['message']}
+        Motivo:\n\n {alert['message']}
         
         Atenciosamente,
         Sistema de Alertas Tesouro Direto
         """
-        
+
         msg.attach(MIMEText(body, 'plain'))
-        
+
         try:
             # Configurar conexão com o servidor SMTP do Brevo
             server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
             server.ehlo()  # Identificação com o servidor
             server.starttls()  # Iniciar TLS
             server.ehlo()  # Reidentificação após TLS
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            
+            server.login(EMAIL_USER, EMAIL_PASSWORD)            
             # Enviar email
             server.send_message(msg)
             server.quit()
         except Exception as e:
-            raise Exception(f"Erro ao enviar email: {str(e)}") 
+            raise Exception(f"Erro ao enviar email: {str(e)}")

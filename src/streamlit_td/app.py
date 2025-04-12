@@ -9,6 +9,7 @@ from visualization import (
     plot_dolar_evolucao
 )
 
+from config import USUARIO, SENHA
 st.set_page_config(
     page_title="Tesouro Direto - Visualização de Dados",
     page_icon="📈",
@@ -84,166 +85,165 @@ def main():
             min_value=data_min,
             max_value=data_max
         )
+        # Campo de usuario
+        usuario = st.sidebar.text_input("Usuário", type="password")
+
+        # Campo de senha
+        senha = st.sidebar.text_input("Senha", type="password")
         
-        # Aplicar filtros
-        df_filtrado = df[
-            (df['Tipo Titulo'] == tipo_selecionado) &
-            (df['Data Base'] >= pd.to_datetime(data_inicio)) &
-            (df['Data Base'] <= pd.to_datetime(data_fim))
-        ]
-        
-        # Aplicar filtro de vencimentos se houver seleção
-        if vencimentos_selecionados:
-            df_filtrado = df_filtrado[
-                df_filtrado['Data Vencimento']
-                .isin(vencimentos_selecionados)
+        if usuario == USUARIO and senha == SENHA:
+            # Aplicar filtros
+            df_filtrado = df[
+                (df['Tipo Titulo'] == tipo_selecionado) &
+                (df['Data Base'] >= pd.to_datetime(data_inicio)) &
+                (df['Data Base'] <= pd.to_datetime(data_fim))
             ]
-        
-        # Ordenar dados por data base
-        df_filtrado = df_filtrado.sort_values('Data Base')
-        
-        # Buscar dados do dólar
-        df_dolar = fetch_dolar_data(data_inicio, data_fim)
-        
-        # Gráfico de linha para taxas
-        st.subheader(f"Evolução das Taxas - {tipo_selecionado}")
-        plot_taxa_evolucao(df_filtrado, tipo_selecionado)
-        
-        # Gráfico de linha para preços
-        st.subheader(f"Evolução dos Preços - {tipo_selecionado}")
-        plot_preco_evolucao(df_filtrado, tipo_selecionado)
-        
-        # Gráfico de linha para dólar
-        st.subheader("Evolução do Dólar")
-        plot_dolar_evolucao(df_dolar)
-        
-        # Tabela com dados recentes
-        st.subheader("Dados Recentes")
-        st.dataframe(
-            df_filtrado.sort_values('Data Base', ascending=False).head(10),
-            use_container_width=True
-        )
-        
-        # Seção de Alertas
-        st.header("📢 Configuração de Alertas")
-        
-        # Formulário para novo alerta
-        with st.form("novo_alerta"):
-            st.subheader("Novo Alerta")
             
-            col1, col2 = st.columns(2)
+            # Aplicar filtro de vencimentos se houver seleção
+            if vencimentos_selecionados:
+                df_filtrado = df_filtrado[
+                    df_filtrado['Data Vencimento']
+                    .isin(vencimentos_selecionados)
+                ]
             
-            with col1:
-                nome = st.text_input("Seu Nome")
-                email = st.text_input("Seu Email")
-                tipo_titulo_alerta = st.selectbox(
-                    "Tipo de Título",
-                    tipos_titulo
-                )
-                ano_vencimento_alerta = st.selectbox(
-                    "Ano de Vencimento",
-                    sorted(vencimentos_por_ano.keys(), reverse=True)
-                )
+            # Ordenar dados por data base
+            df_filtrado = df_filtrado.sort_values('Data Base')
             
-            with col2:
-                st.subheader("Critérios de Alerta")
-                preco_min = st.number_input(
-                    "Preço Mínimo (R$)",
-                    min_value=0.0,
-                    value=None,
-                    step=0.01
-                )
-                preco_max = st.number_input(
-                    "Preço Máximo (R$)",
-                    min_value=0.0,
-                    value=None,
-                    step=0.01
-                )
-                taxa_min = st.number_input(
-                    "Taxa Mínima (%)",
-                    min_value=0.0,
-                    value=None,
-                    step=0.01
-                )
-                taxa_max = st.number_input(
-                    "Taxa Máxima (%)",
-                    min_value=0.0,
-                    value=None,
-                    step=0.01
-                )
+            # Buscar dados do dólar
+            df_dolar = fetch_dolar_data(data_inicio, data_fim)
             
-            if st.form_submit_button("Criar Alerta"):
-                if nome and email:
-                    alert_manager.add_alert(
-                        nome=nome,
-                        email=email,
-                        tipo_titulo=tipo_titulo_alerta,
-                        ano_vencimento=ano_vencimento_alerta,
-                        preco_min=preco_min,
-                        preco_max=preco_max,
-                        taxa_min=taxa_min,
-                        taxa_max=taxa_max
-                    )
-                    st.success("Alerta criado com sucesso!")
-                else:
-                    st.error("Por favor, preencha nome e email.")
-        
-        # Tabela de alertas ativos
-        st.subheader("Alertas Ativos")
-        if not alert_manager.alerts.empty:
-            # Adicionar coluna de ações
-            alertas_df = alert_manager.alerts.copy()
-            alertas_df['Ações'] = range(len(alertas_df))
+            # Gráfico de linha para taxas
+            st.subheader(f"Evolução das Taxas - {tipo_selecionado}")
+            plot_taxa_evolucao(df_filtrado, tipo_selecionado)
             
-            # Mostrar tabela com botões de remoção
-            for idx, alerta in alertas_df.iterrows():
-                col1, col2 = st.columns([0.9, 0.1])
+            # Gráfico de linha para preços
+            st.subheader(f"Evolução dos Preços - {tipo_selecionado}")
+            plot_preco_evolucao(df_filtrado, tipo_selecionado)
+            
+            # Gráfico de linha para dólar
+            st.subheader("Evolução do Dólar")
+            plot_dolar_evolucao(df_dolar)
+            
+            # Tabela com dados recentes
+            st.subheader("Dados Recentes")
+            st.dataframe(
+                df_filtrado.sort_values('Data Base', ascending=False).head(10),
+                use_container_width=True
+            )
+            
+            # Seção de Alertas
+            st.header("📢 Configuração de Alertas")
+            
+            # Formulário para novo alerta
+            with st.form("novo_alerta"):
+                st.subheader("Novo Alerta")
+                
+                col1, col2 = st.columns(2)
+                
                 with col1:
-                    st.write(
-                        f"**{alerta['nome']}** - {alerta['tipo_titulo']} "
-                        f"({alerta['ano_vencimento']})"
+                    nome = st.text_input("Seu Nome")
+                    email = st.text_input("Seu Email")
+                    tipo_titulo_alerta = st.selectbox(
+                        "Tipo de Título",
+                        tipos_titulo
                     )
-                    st.write(f"Email: {alerta['email']}")
-                    detalhes = []
-                    if pd.notna(alerta['preco_min']):
-                        detalhes.append(
-                            f"Preço Mín: R\$ {alerta['preco_min']:.2f}"
-                        )
-                    if pd.notna(alerta['preco_max']):
-                        detalhes.append(
-                            f"Preço Máx: R\$ {alerta['preco_max']:.2f}"
-                        )
-                    if pd.notna(alerta['taxa_min']):
-                        detalhes.append(
-                            f"Taxa Mín: {alerta['taxa_min']:.2f}%"
-                        )
-                    if pd.notna(alerta['taxa_max']):
-                        detalhes.append(
-                            f"Taxa Máx: {alerta['taxa_max']:.2f}%"
-                        )
-                    st.write(" | ".join(detalhes))
-                    st.write(f"Criado em: {alerta['data_criacao']}")
+                    ano_vencimento_alerta = st.selectbox(
+                        "Ano de Vencimento",
+                        sorted(vencimentos_por_ano.keys(), reverse=True)
+                    )
+                
                 with col2:
-                    if st.button("🗑️", key=f"remove_{idx}"):
-                        alert_manager.remove_alert(idx)
-                        st.rerun()
-                st.divider()
-        else:
-            st.info("Nenhum alerta configurado.")
-        
-        # Botão para verificar alertas
-        if st.button("Verificar Alertas"):
-            alerts_triggered = alert_manager.check_alerts(df)
-            if alerts_triggered:
-                st.success(f"{len(alerts_triggered)} alerta(s) acionado(s)!")
-                for alert in alerts_triggered:
-                    try:
-                        alert_manager.send_alert_email(alert)
-                        st.success(f"Email enviado para {alert['email']}")
-                    except Exception as e:
-                        st.error(f"Erro ao enviar email: {str(e)}")
+                    st.subheader("Critérios de Alerta")
+                    (preco_min, preco_max) = st.slider(
+                        "Preço de interesse (R$)",
+                        min_value=0.0,
+                        max_value=99999.0,
+                        value=(0.0, 99999.0),
+                        step=1.0
+                    )
+
+                    (taxa_min, taxa_max) = st.slider(
+                        "Taxa de interesse (%)",
+                        min_value=0.0,
+                        max_value=99.0,
+                        value=(0.0, 99.0),
+                        step=1.0
+                    )
+                
+                if st.form_submit_button("Criar Alerta"):
+                    if nome and email:
+                        alert_manager.add_alert(
+                            nome=nome,
+                            email=email,
+                            tipo_titulo=tipo_titulo_alerta,
+                            ano_vencimento=ano_vencimento_alerta,
+                            preco_min=preco_min,
+                            preco_max=preco_max,
+                            taxa_min=taxa_min,
+                            taxa_max=taxa_max
+                        )
+                        st.success("Alerta criado com sucesso!")
+                    else:
+                        st.error("Por favor, preencha nome e email.")
+            
+            # Tabela de alertas ativos
+            st.subheader("Alertas Ativos")
+            if not alert_manager.alerts.empty:
+                # Adicionar coluna de ações
+                alertas_df = alert_manager.alerts.copy()
+                alertas_df['Ações'] = range(len(alertas_df))
+                
+                # Mostrar tabela com botões de remoção
+                for idx, alerta in alertas_df.iterrows():
+                    col1, col2 = st.columns([0.9, 0.1])
+                    with col1:
+                        st.write(
+                            f"**{alerta['nome']}** - {alerta['tipo_titulo']} "
+                            f"({alerta['ano_vencimento']})"
+                        )
+                        st.write(f"Email: {alerta['email']}")
+                        detalhes = []
+                        if pd.notna(alerta['preco_min']):
+                            detalhes.append(
+                                f"Preço Mín: R\$ {alerta['preco_min']:.2f}"
+                            )
+                        if pd.notna(alerta['preco_max']):
+                            detalhes.append(
+                                f"Preço Máx: R\$ {alerta['preco_max']:.2f}"
+                            )
+                        if pd.notna(alerta['taxa_min']):
+                            detalhes.append(
+                                f"Taxa Mín: {alerta['taxa_min']:.2f}%"
+                            )
+                        if pd.notna(alerta['taxa_max']):
+                            detalhes.append(
+                                f"Taxa Máx: {alerta['taxa_max']:.2f}%"
+                            )
+                        st.write(" | ".join(detalhes))
+                        st.write(f"Criado em: {alerta['data_criacao']}")
+                    with col2:
+                        if st.button("🗑️", key=f"remove_{idx}"):
+                            alert_manager.remove_alert(idx)
+                            st.rerun()
+                    st.divider()
             else:
-                st.info("Nenhum alerta acionado.")
+                st.info("Nenhum alerta configurado.")
+            
+            # Botão para verificar alertas
+            if st.button("Verificar Alertas"):
+                alerts_triggered = alert_manager.check_alerts(df)
+                if alerts_triggered:
+                    st.success(f"{len(alerts_triggered)} alerta(s) acionado(s)!")
+                    for alert in alerts_triggered:
+                        try:
+                            alert_manager.send_alert_email(alert)
+                            st.success(f"Email enviado para {alert['email']}")
+                        except Exception as e:
+                            st.error(f"Erro ao enviar email: {str(e)}")
+                else:
+                    st.info("Nenhum alerta acionado.")
+        else:
+            st.error("Acesso negado.")
 
 if __name__ == "__main__":
     main()
