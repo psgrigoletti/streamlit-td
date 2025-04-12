@@ -9,7 +9,35 @@ from visualization import (
     plot_dolar_evolucao
 )
 
+import threading
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from uvicorn import Config, Server
+
 from config import USUARIO, SENHA
+
+# Tarefa a ser executada externamente
+def tarefa_pesada():
+    print("Tarefa iniciada...")
+    print("Tarefa concluída!")
+
+# API externa
+api = FastAPI()
+
+@api.get("/executar-tarefa")
+def executar():
+    threading.Thread(target=tarefa_pesada).start()
+    return JSONResponse(content={"status": "Tarefa iniciada com sucesso!"})
+
+# --- Rodar o servidor FastAPI com Uvicorn programaticamente ---
+def start_api():
+    config = Config(app=api, host="0.0.0.0", port=8001, log_level="info")
+    server = Server(config)
+    server.run()
+
+# --- Start da API em segundo plano ---
+threading.Thread(target=start_api, daemon=True).start()
+
 st.set_page_config(
     page_title="Tesouro Direto - Visualização de Dados",
     page_icon="📈",
